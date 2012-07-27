@@ -49,7 +49,7 @@
   gravity_y = 10;
 
   window.onload = function() {
-    var animloop, boxLayer, boxes, debugLayer, drawer, lastTime, lineLayer, linkMaking, makeBox, makeDrawer, makeLink, makeWall, makeWorld, mouse, position, render, selection, stage, started, velocity, wh, world, ww;
+    var animloop, boxLayer, boxes, debug, debugLayer, drawer, lastTime, lineLayer, linkMaking, makeBox, makeDrawer, makeLink, makeWall, makeWorld, mouse, position, render, selection, stage, started, velocity, wh, world, ww;
     ww = window.innerWidth;
     wh = window.innerHeight;
     mouse = {
@@ -58,6 +58,7 @@
       joint: null
     };
     boxes = [];
+    debug = false;
     linkMaking = false;
     started = false;
     selection = [];
@@ -105,8 +106,9 @@
       _wallBottom = world.CreateBody(wallBd);
       return _wallBottom.CreateFixture2(wall);
     };
-    makeBox = function(world, x, y, text) {
+    makeBox = function(world, x, y, text, pinned) {
       var bodyDef, box, fixtureDef, h, rect, shape, trans, w;
+      if (pinned == null) pinned = false;
       trans = null;
       text = new Kinetic.Text({
         x: 1,
@@ -144,8 +146,9 @@
         links: []
       };
       box.group = new Kinetic.Group({
-        x: x + w / 2,
-        y: y + h / 2,
+        draggable: pinned,
+        x: x,
+        y: y,
         scale: {
           x: 1,
           y: 1
@@ -198,7 +201,7 @@
       box.group.add(rect);
       box.group.add(text);
       bodyDef = new BodyDef();
-      bodyDef.type = Body.b2_dynamicBody;
+      bodyDef.type = pinned ? Body.b2_kinematicBody : Body.b2_dynamicBody;
       bodyDef.position.Set(box.group.attrs.x / scaleFactor, box.group.attrs.y / scaleFactor);
       bodyDef.angle = 0;
       bodyDef.angularDamping = box_angularDampling;
@@ -213,7 +216,7 @@
       fixtureDef.friction = box_friction;
       fixtureDef.shape = shape;
       box.body.CreateFixture(fixtureDef);
-      text.on("click", function() {
+      text.on("dblclick", function() {
         var txt;
         txt = prompt("Enter the name", text.attrs.text);
         if (txt) {
@@ -243,21 +246,67 @@
           return box.body.SetAwake(true);
         }
       });
+      box.group.on("dragstart", function() {
+        if (box.body.GetType() === Body.b2_dynamicBody) return false;
+        if (trans) trans.stop();
+        box.group.moveToTop();
+        rect.setAttrs({
+          shadow: {
+            offset: {
+              x: 15,
+              y: 15
+            }
+          }
+        });
+        return box.group.setAttrs({
+          scale: {
+            x: 1.4,
+            y: 1.4
+          }
+        });
+      });
       box.group.attrs.moved = function() {
-        var link, points, _i, _len, _ref;
+        var link, points, _i, _len, _ref, _results;
         _ref = box.links;
+        _results = [];
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           link = _ref[_i];
           points = link.line.getPoints();
           points[link.side].x = box.group.attrs.x;
           points[link.side].y = box.group.attrs.y;
-          link.line.setPoints(points);
+          _results.push(link.line.setPoints(points));
         }
-        return lineLayer.draw();
+        return _results;
       };
+      box.group.on("dragmove", function(e) {
+        box.body.SetPosition({
+          x: box.group.attrs.x / scaleFactor,
+          y: box.group.attrs.y / scaleFactor
+        });
+        return box.group.attrs.moved();
+      });
+      box.group.on("dragend", function() {
+        rect.setAttrs({
+          shadow: {
+            offset: {
+              x: 5,
+              y: 5
+            }
+          }
+        });
+        return trans = box.group.transitionTo({
+          duration: 0.5,
+          easing: "elastic-ease-out",
+          scale: {
+            x: 1,
+            y: 1
+          }
+        });
+      });
       boxLayer.add(box.group);
       boxes.push(box);
-      if (started) return boxLayer.draw();
+      if (started) boxLayer.draw();
+      return box;
     };
     makeLink = function(world, box1, box2) {
       var line, spring;
@@ -319,14 +368,16 @@
         _results = [];
         for (_i = 0, _len = selection.length; _i < _len; _i++) {
           box = selection[_i];
-          _results.push(box.body.SetType(Body.b2_kineticBody));
+          box.body.SetType(Body.b2_kineticBody);
+          _results.push(box.group.setDraggable(true));
         }
         return _results;
       } else if (e.keyCode === 82) {
         _results2 = [];
         for (_j = 0, _len2 = selection.length; _j < _len2; _j++) {
           box = selection[_j];
-          _results2.push(box.body.SetType(Body.b2_dynamicBody));
+          box.body.SetType(Body.b2_dynamicBody);
+          _results2.push(box.group.setDraggable(false));
         }
         return _results2;
       } else if (e.keyCode === 90) {
@@ -336,6 +387,9 @@
           _results3.push(box.body.SetAngle(0));
         }
         return _results3;
+      } else if (e.keyCode === 68) {
+        debug = !debug;
+        if (!debug) return debugLayer.clear();
       } else {
         boxLayer.draw();
         return lineLayer.draw();
@@ -344,9 +398,12 @@
     world = makeWorld();
     drawer = makeDrawer(world);
     makeWall(world);
-    makeBox(world, 100, 100, 'Box #' + boxes.length);
-    makeBox(world, 400, 200, 'Box #' + boxes.length);
+    makeBox(world, ww / 2, wh / 3, 'Box #' + boxes.length, true);
+    makeBox(world, ww / 3, wh / 2, 'Box #' + boxes.length);
+    makeBox(world, 2 * ww / 3, wh / 2, 'Box #' + boxes.length);
     makeLink(world, boxes[0], boxes[1]);
+    makeLink(world, boxes[0], boxes[2]);
+    makeLink(world, boxes[1], boxes[2]);
     started = true;
     boxLayer.draw();
     lineLayer.draw();
@@ -363,6 +420,7 @@
       delta = (time - lastTime) / 1000;
       lastTime = time;
       world.Step(delta, delta * velocity, delta * position);
+      if (debug) world.DrawDebugData();
       for (_i = 0, _len = boxes.length; _i < _len; _i++) {
         box = boxes[_i];
         pos = box.body.GetPosition();

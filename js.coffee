@@ -31,6 +31,7 @@ window.onload = ->
         y: 0
         joint: null
     boxes = []
+    debug = false
     linkMaking = false
     started = false
     selection = []
@@ -87,7 +88,7 @@ window.onload = ->
         _wallBottom = world.CreateBody(wallBd)
         _wallBottom.CreateFixture2 wall
 
-    makeBox = (world, x, y, text) ->
+    makeBox = (world, x, y, text, pinned=false) ->
         trans = null
 
         text = new Kinetic.Text
@@ -124,9 +125,9 @@ window.onload = ->
             # cornerRadius: 10
         box = links: []
         box.group = new Kinetic.Group
-            # draggable: true
-            x: x + w / 2
-            y: y + h / 2
+            draggable: pinned
+            x: x
+            y: y
             scale:
                 x: 1
                 y: 1
@@ -168,7 +169,7 @@ window.onload = ->
 
                 
         bodyDef = new BodyDef()
-        bodyDef.type = Body.b2_dynamicBody
+        bodyDef.type = if pinned then Body.b2_kinematicBody else Body.b2_dynamicBody
         bodyDef.position.Set box.group.attrs.x / scaleFactor, box.group.attrs.y / scaleFactor
         bodyDef.angle = 0
         bodyDef.angularDamping = box_angularDampling
@@ -184,7 +185,7 @@ window.onload = ->
         fixtureDef.shape = shape
         box.body.CreateFixture fixtureDef
 
-        text.on "click", ->
+        text.on "dblclick", ->
             txt = prompt "Enter the name", text.attrs.text
             if txt
                 text.setAttrs text: txt
@@ -206,20 +207,21 @@ window.onload = ->
                 box.body.SetAwake(true)
                 
             
-        # box.group.on "dragstart", ->
-        #     box.body.SetAwake false
-        #     trans.stop()  if trans
-        #     box.group.moveToTop()
-        #     rect.setAttrs
-        #         shadow:
-        #             offset:
-        #                 x: 15
-        #                 y: 15
+        box.group.on "dragstart", ->
+            if box.body.GetType() == Body.b2_dynamicBody
+                return false
+            trans.stop()  if trans
+            box.group.moveToTop()
+            rect.setAttrs
+                shadow:
+                    offset:
+                        x: 15
+                        y: 15
 
-        #     box.group.setAttrs
-        #         scale:
-        #             x: 1.4
-        #             y: 1.4
+            box.group.setAttrs
+                scale:
+                    x: 1.4
+                    y: 1.4
 
         box.group.attrs.moved = ->
             for link in box.links
@@ -227,32 +229,30 @@ window.onload = ->
                 points[link.side].x = box.group.attrs.x
                 points[link.side].y = box.group.attrs.y
                 link.line.setPoints points
-            lineLayer.draw()
 
-        # box.group.on "dragmove", (e) ->
-        #     box.body.SetPosition x: box.group.attrs.x / scaleFactor, y: box.group.attrs.y / scaleFactor
-        #     box.group.attrs.moved()
-        #     box.body.SetAwake false
+        box.group.on "dragmove", (e) ->
+            box.body.SetPosition x: box.group.attrs.x / scaleFactor, y: box.group.attrs.y / scaleFactor
+            box.group.attrs.moved()
 
-        # box.group.on "dragend", ->
+        box.group.on "dragend", ->
+            rect.setAttrs
+                shadow:
+                    offset:
+                        x: 5
+                        y: 5
 
-        #     rect.setAttrs
-        #         shadow:
-        #             offset:
-        #                 x: 5
-        #                 y: 5
+            trans = box.group.transitionTo
+                duration: 0.5
+                easing: "elastic-ease-out"
+                scale:
+                    x: 1
+                    y: 1
 
-        #     trans = box.group.transitionTo
-        #         duration: 0.5
-        #         easing: "elastic-ease-out"
-        #         scale:
-        #             x: 1
-        #             y: 1
-        #     box.body.SetAwake true
 
         boxLayer.add box.group
         boxes.push box
         boxLayer.draw() if started
+        box
 
 
     makeLink = (world, box1, box2)->
@@ -314,13 +314,19 @@ window.onload = ->
                 linkMaking = true
         else if e.keyCode == 83  # s
             for box in selection
-                box.body.SetType(Body.b2_kineticBody)
+                box.body.SetType Body.b2_kineticBody
+                box.group.setDraggable true
         else if e.keyCode == 82  # r
             for box in selection
-                box.body.SetType(Body.b2_dynamicBody)
+                box.body.SetType Body.b2_dynamicBody
+                box.group.setDraggable false
         else if e.keyCode == 90  # z
             for box in selection
-                box.body.SetAngle(0)
+                box.body.SetAngle 0
+        else if e.keyCode == 68  # d
+            debug = not debug
+            if not debug
+                debugLayer.clear()
         else
             boxLayer.draw()
             lineLayer.draw()
@@ -329,9 +335,13 @@ window.onload = ->
     drawer = makeDrawer world
     makeWall world
     
-    makeBox world, 100, 100, ('Box #' + boxes.length) 
-    makeBox world, 400, 200, ('Box #' + boxes.length)
+    makeBox world, ww / 2, wh / 3, ('Box #' + boxes.length), true
+    makeBox world, ww / 3, wh / 2, ('Box #' + boxes.length)
+    makeBox world, 2 * ww / 3, wh / 2, ('Box #' + boxes.length)
     makeLink world, boxes[0], boxes[1]
+    makeLink world, boxes[0], boxes[2]
+    makeLink world, boxes[1], boxes[2]
+    
     started = true
     boxLayer.draw()
     lineLayer.draw()
@@ -349,7 +359,8 @@ window.onload = ->
         delta = (time - lastTime) / 1000
         lastTime = time
         world.Step delta, delta * velocity, delta * position
-        # world.DrawDebugData()
+        if debug
+            world.DrawDebugData()
         for box in boxes
             pos = box.body.GetPosition()
             box.group.setX pos.x * scaleFactor
