@@ -30,6 +30,7 @@ window.onload = ->
         x: 0
         y: 0
         joint: null
+    got = null
     boxes = []
     debug = false
     linkMaking = false
@@ -192,9 +193,7 @@ window.onload = ->
                 rect.setAttrs width: text.textWidth + 20
 
         box.group.on "mousedown", (e) ->
-            if box.group.attrs.selected
-                box.group.attrs.unselect()
-            else
+            if not box.group.attrs.selected
                 box.group.attrs.select(e.shiftKey)
             if not mouse.joint
                 joint = new MouseJointDef();
@@ -205,6 +204,7 @@ window.onload = ->
                 joint.maxForce = 300 * box.body.GetMass()
                 mouse.joint = world.CreateJoint(joint)
                 box.body.SetAwake(true)
+            got = box
                 
             
         box.group.on "dragstart", ->
@@ -305,7 +305,14 @@ window.onload = ->
         if mouse.joint
             world.DestroyJoint mouse.joint
             mouse.joint = null
-        
+
+    stage.getContent().addEventListener 'mousedown', ->
+        if not got
+            boxes.map (b) -> b.group.attrs.unselect()
+
+    stage.getContent().addEventListener 'mouseup', ->
+        got = null
+
     window.onkeydown = (e) ->
         if e.keyCode == 78  # n
             makeBox world, mouse.x, mouse.y, ('Box #' + boxes.length)

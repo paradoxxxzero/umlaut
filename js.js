@@ -49,7 +49,7 @@
   gravity_y = 10;
 
   window.onload = function() {
-    var animloop, boxLayer, boxes, debug, debugLayer, drawer, lastTime, lineLayer, linkMaking, makeBox, makeDrawer, makeLink, makeWall, makeWorld, mouse, position, render, selection, stage, started, velocity, wh, world, ww;
+    var animloop, boxLayer, boxes, debug, debugLayer, drawer, got, lastTime, lineLayer, linkMaking, makeBox, makeDrawer, makeLink, makeWall, makeWorld, mouse, position, render, selection, stage, started, velocity, wh, world, ww;
     ww = window.innerWidth;
     wh = window.innerHeight;
     mouse = {
@@ -57,6 +57,7 @@
       y: 0,
       joint: null
     };
+    got = null;
     boxes = [];
     debug = false;
     linkMaking = false;
@@ -230,11 +231,7 @@
       });
       box.group.on("mousedown", function(e) {
         var joint;
-        if (box.group.attrs.selected) {
-          box.group.attrs.unselect();
-        } else {
-          box.group.attrs.select(e.shiftKey);
-        }
+        if (!box.group.attrs.selected) box.group.attrs.select(e.shiftKey);
         if (!mouse.joint) {
           joint = new MouseJointDef();
           joint.bodyA = world.GetGroundBody();
@@ -243,8 +240,9 @@
           joint.collideConnected = true;
           joint.maxForce = 300 * box.body.GetMass();
           mouse.joint = world.CreateJoint(joint);
-          return box.body.SetAwake(true);
+          box.body.SetAwake(true);
         }
+        return got = box;
       });
       box.group.on("dragstart", function() {
         if (box.body.GetType() === Body.b2_dynamicBody) return false;
@@ -358,6 +356,16 @@
         return mouse.joint = null;
       }
     };
+    stage.getContent().addEventListener('mousedown', function() {
+      if (!got) {
+        return boxes.map(function(b) {
+          return b.group.attrs.unselect();
+        });
+      }
+    });
+    stage.getContent().addEventListener('mouseup', function() {
+      return got = null;
+    });
     window.onkeydown = function(e) {
       var box, _i, _j, _k, _len, _len2, _len3, _results, _results2, _results3;
       if (e.keyCode === 78) {
